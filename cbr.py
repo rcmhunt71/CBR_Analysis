@@ -770,6 +770,7 @@ if __name__ == '__main__':
 
     # Display summary of the exceptions and corresponding issue counts.
     total_count = 0
+    print(f"\nResults:")
     for exc_type, count in sorted(issues.tally_defect_types().items(), key=lambda x: x[1], reverse=True):
         print(f"- '{exc_type}': {count}")
         total_count += count
