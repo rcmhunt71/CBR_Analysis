@@ -1,4 +1,5 @@
 import argparse
+import logging
 import re
 import time
 import typing
@@ -59,6 +60,10 @@ class MDExceptions:
     # ----------------------------------------------------------------------------------------
     # <EXCEPTION_NAME>_PARSE regular expression pattern lists - stored in alphabetical order.
     # ----------------------------------------------------------------------------------------
+    EABSTRACTERROR_PARSE = [
+        re.compile(r'.*abstract error\.(?P<extra>.*)?', re.IGNORECASE | re.DOTALL)
+    ]
+
     EACCESSVIOLATION_PARSE = [
         re.compile(
             r'address\s+(?P<violation_address>[\w\d]+)\.?\s*'
@@ -67,21 +72,31 @@ class MDExceptions:
             re.IGNORECASE | re.DOTALL),
     ]
 
+    EARGUMENTEXCEPTION_PARSE = GENERAL_EXCEPTION_PATTERN
     EARGUMENTOUTOFRANGEEXCEPTION_PARSE = GENERAL_EXCEPTION_PATTERN
     ECONVERTERROR_PARSE = GENERAL_EXCEPTION_PATTERN
-    EDIRECTORYNOTFOUNDEXCEPTION_PARSE = GENERAL_EXCEPTION_PATTERN
 
     EDATABASEERROR_PARSE = [
-        re.compile(r'\'(?P<value>.*)\'\s+is not a valid .* value .*\'\.(?P<extra>.*)?', re.IGNORECASE | re.DOTALL),
-        re.compile(r'((?P<form>.*): )?cannot modify a read-only dataset\.(?P<extra>.*)?', re.IGNORECASE | re.DOTALL),
+        re.compile(r'\'(?P<value>.*)\'\s+is not a valid .* value for field \'.*\'\.(?P<extra>.*)?',
+                   re.IGNORECASE | re.DOTALL),
+        re.compile(r'((?P<form>.*): )?cannot modify a read-only dataset\.(?P<extra>.*)?',
+                   re.IGNORECASE | re.DOTALL),
         re.compile(r'Bookmark not found (?P<bookmark>.*)', re.IGNORECASE | re.DOTALL),
+        re.compile(r'.*\.(\s.*\.)?(?P<extra>.*)?', re.IGNORECASE | re.DOTALL)
     ]
+
+    EDIRECTORYNOTFOUNDEXCEPTION_PARSE = GENERAL_EXCEPTION_PATTERN
+    EDOMPARSEERROR_PARSE = GENERAL_EXCEPTION_PATTERN
 
     EEXTERNALEXCEPTION_PARSE = [
         re.compile(r'address\s+(?P<violation_address>[\w\d]+).*'
                    r'address\s+(?P<read_address>[\w\d]+).*'
                    r'address:\s+(?P<v_address>[\w\d]+)\s+\((?P<r_address>[\w\d]+)\)\.'
                    r'(?P<extra>.*)?', re.IGNORECASE | re.DOTALL),
+
+        re.compile(r'stack overflow.*module:\s*.*\.(exe|dll).*code:.*address:'
+                   r' (?P<address>[\w\d]+)\s+(?P<another_address>[\w\d]+)\.(?P<extra>.*)?',
+                   re.IGNORECASE | re.DOTALL),
     ]
 
     EFCREATEERROR_PARSE = GENERAL_EXCEPTION_PATTERN
@@ -98,41 +113,79 @@ class MDExceptions:
             re.IGNORECASE | re.MULTILINE | re.DOTALL),
 
         re.compile(
-            r'thread id\s*=\s*(?P<thread_id>\d+)[\r\n]*'
-            r'dataset name = [\w\d]+[\r\n]+\s*'
+            r'.*thread id =(?P<thread_id>\d+)\s*^'
+            r'dataset name = [\w\d]+\s*^'
             r'.*after login:.*\.(?P<extra>.*)?',
-            re.IGNORECASE | re.DOTALL),
+            re.IGNORECASE | re.DOTALL | re.MULTILINE),
 
         re.compile(
-            r'thread id\s*=\s*(?P<thread_id>\d+)[\r\n]*'
-            r'dataset name = [\w\d]+[\r\n]+\s*'
-            r'invariant operation\.(?P<extra>.*)?',
-            re.IGNORECASE | re.DOTALL),
+            r'.*thread id =(?P<thread_id>\d+)\s*^'
+            r'dataset name = [\w\d]+\s*^'
+            r'.*invalid variant operation\.'
+            r'(?P<extra>.*)?',
+            re.IGNORECASE | re.DOTALL | re.MULTILINE),
     ]
 
     EINOUTERROR_PARSE = [
-        re.compile(r'create file\s+"(?P<filename>[\w\d.\\:]+)"\..*process.(?P<extra>.*)?'),
+        re.compile(r'.*create file\s+"(?P<filename>[\w\d.\\:]+)"\..*process.(?P<extra>.*)?', re.IGNORECASE | re.DOTALL),
     ]
 
     EINTOVERFLOW_PARSE = GENERAL_EXCEPTION_PATTERN
-    EINVALIDCAST_PARSE = GENERAL_EXCEPTION_PATTERN
 
-    EINVALIDOPERATION_PARSE = [
-        re.compile(r'no parent window\.(?P<extra>.*)?', re.IGNORECASE | re.DOTALL),
-        re.compile(r'disabled or invisible window\.(?P<extra>.*)?', re.IGNORECASE | re.DOTALL),
+    EINVALIDCAST_PARSE = [
+        re.compile(r'.*typecast\.(?P<extra>.*)?', re.IGNORECASE | re.DOTALL)
     ]
 
+    EINVALIDGRIDOPERATION_PARSE = GENERAL_EXCEPTION_PATTERN
+
+    EINVALIDOPERATION_PARSE = [
+        re.compile(r'.*no parent window\.(?P<extra>.*)?', re.IGNORECASE | re.DOTALL),
+        re.compile(r'.*disabled or invisible window\.(?P<extra>.*)?', re.IGNORECASE | re.DOTALL),
+    ]
+
+    EINVALIDPOINTER_PARSE = GENERAL_EXCEPTION_PATTERN
+
     EJCLANSISTRINGLISTERROR_PARSE = [
-        re.compile(r'index out of bounds\s*\((?P<index>\d+)\)\.(?P<extra>.*)?', re.IGNORECASE | re.DOTALL),
+        re.compile(r'.*index out of bounds\s*\((?P<index>\d+)\)\.(?P<extra>.*)?', re.IGNORECASE | re.DOTALL),
     ]
 
     ELISTERROR_PARSE = [
-        re.compile(r'index out of bounds\s*\((?P<index>\d+)\)\.(?P<extra>.*)?', re.IGNORECASE | re.DOTALL),
+        re.compile(r'.*index out of bounds\s*\((?P<index>\d+)\).*?\.(?P<extra>.*)?', re.IGNORECASE | re.DOTALL),
     ]
 
-    EOLEEXCEPTION_PARSE = GENERAL_EXCEPTION_PATTERN
-    EOLESYSERROR_PARSE = GENERAL_EXCEPTION_PATTERN
-    EVARIANTINVALIDOPERROR_PARSE = GENERAL_EXCEPTION_PATTERN
+    EOLEERROR_PARSE = GENERAL_EXCEPTION_PATTERN
+
+    EOSERROR_PARSE = [
+         re.compile(r'.*code:\s+\d+\.(?P<extra>.*)?', re.IGNORECASE | re.DOTALL)
+    ]
+
+    EOSNOMOREFILES_PARSE = GENERAL_EXCEPTION_PATTERN
+    EOSSUCCESS_PARSE = GENERAL_EXCEPTION_PATTERN
+    EPRINTER_PARSE = GENERAL_EXCEPTION_PATTERN
+    EPRIVILEGE_PARSE = [
+        re.compile(r'.*privileged instruction\.(?P<extra>.*)?', re.IGNORECASE | re.DOTALL)
+    ]
+    ERANGEERROR_PARSE = [
+        re.compile(r'.*range check error\.(?P<extra>.*)?', re.IGNORECASE | re.DOTALL)
+    ]
+    EREADERROR_PARSE = [
+        re.compile(r'.*read error\.(?P<extra>.*)?', re.IGNORECASE | re.DOTALL)
+    ]
+
+    ESTRINGLISTERROR_PARSE = [
+        re.compile(r'.*out of bounds \((?P<index>\d+)\)\.(?P<extra>.*)?', re.IGNORECASE | re.DOTALL)
+    ]
+
+    ETHREAD_PARSE = GENERAL_EXCEPTION_PATTERN
+
+    ETIFFEXCEPTION_PARSE = [
+        re.compile(r'.*dimensions exceeded\.(?P<extra>.*)?', re.IGNORECASE | re.DOTALL)
+    ]
+
+    EVARIANTARRAYCREATEERROR_PARSE = GENERAL_EXCEPTION_PATTERN
+    EVARIANTBADINDEXERROR_PARSE = GENERAL_EXCEPTION_PATTERN
+    EVARIANTBADVARTYPEERROR_PARSE = GENERAL_EXCEPTION_PATTERN
+    EVARIANTINVALIDARGERROR_PARSE = GENERAL_EXCEPTION_PATTERN
 
     EXCEPTION_PARSE = [
         re.compile(r'at address\s+(?P<v_address>[\w\d]+)\s+.*'
@@ -140,6 +193,11 @@ class MDExceptions:
 
         re.compile(r'.*?[\r\n]+(?P<extra>.*)?', re.IGNORECASE | re.DOTALL),
     ]
+
+    EXMLDOCERROR_PARSE = GENERAL_EXCEPTION_PATTERN
+    EOLEEXCEPTION_PARSE = GENERAL_EXCEPTION_PATTERN
+    EOLESYSERROR_PARSE = GENERAL_EXCEPTION_PATTERN
+    EVARIANTINVALIDOPERROR_PARSE = GENERAL_EXCEPTION_PATTERN
 
 
 # Directive to avoid typing issues with Jira objects
@@ -169,10 +227,12 @@ class DefectInfo:
         """
         self.jira = jira_issue
         self._debug = debug
-        self.exception_type, self.bug_id, self.version = self._parse_summary()
+        self.log = logging.getLogger(self.__class__.__name__)
         self.error_msg = None
         self.general_error_msg = None
         self.user_added_data = None
+
+        self.exception_type, self.bug_id, self.version = self._parse_summary()
         self._parse_metadata()
 
     @property
@@ -212,7 +272,9 @@ class DefectInfo:
         """
         match = self.SUMMARY_PARSE.match(self.jira.fields.summary)
         if match is not None:
-            return match.group('error'), match.group('bug_id'), match.group('version')
+            results = match.group('error'), match.group('bug_id'), match.group('version')
+            self.log.debug(f"{self.defect_id}: Parsed summary: {results}")
+            return results
         return '', '', ''
 
     def _parse_general_exception_msg(self) -> typing.NoReturn:
@@ -229,11 +291,13 @@ class DefectInfo:
         if match is not None:
             for attr, value in match.groupdict().items():
                 setattr(self, attr, value)
+                self.log.debug(f'{self.defect_id}:    - Added attribute: "{attr}" -> "{value}"')
         else:
             # 'match is None' indicates that the full (raw) description does not match the general expected format.
             # Save the message, but no additional processing will be done.
-            if self._debug:
-                print(f"NOTE: Unable to match {pattern} to:\n'{message}'")
+            self.log.debug(f"{self.defect_id} --> NOTE: Unable to match {pattern} to:'{message}'.")
+            self.log.debug(f"{self.defect_id} -->       Saving message to general_error_msg.")
+
             self.general_error_msg = message
 
     def _parse_metadata(self) -> typing.NoReturn:
@@ -249,31 +313,38 @@ class DefectInfo:
 
         # Determine the correct exception parsing list
         pattern_name = f"{self.exception_type.upper()}_PARSE"
+        self.log.debug(f"{self.defect_id}: Using pattern: '{pattern_name}'")
         try:
             patterns = getattr(MDExceptions, pattern_name)
         except AttributeError:
-            print(f"ERROR: Unable to find EXCEPTION pattern: {pattern_name}")
+            self.log.error(f"{self.defect_id}: Unable to find EXCEPTION pattern: {pattern_name}")
             return
         else:
             # Pattern found, but not specific patterns defined, so the entire message will be stored.
             if not isinstance(patterns, list):
+                self.log.debug(f"{self.defect_id}: '{pattern_name}' is not a list. No additional parsing required.")
                 return
 
         # Iterate through the pattern list to see if there is a match.
         match = None
-        for pattern in patterns:
+        for index, pattern in enumerate(patterns, 0):
             match = pattern.search(self._remove_control_characters(self.error_msg))
 
             # Match found, replace error/instance specific data with <data_field_type> string and stop.
             if match is not None:
+                self.log.debug(f"{self.defect_id}: Match found for msg. Pattern number: {index}")
                 self._substitute_matches(match)
                 break
 
         # No match was found in the list of patterns
-        if match is None and len(patterns) > 0 and self._debug:
-            formatted_out_msg = ''.join([f"\t{line}\n" for line in self.error_msg.split("\n")])
-            print(f"- {pattern_name}: Unable to find a generic pattern matching the description in list.")
-            print(f"  Description:\n{formatted_out_msg}\n")
+        if match is None and len(patterns) > 0:
+            formatted_out_msg = [f"\t{line}" for line in self.error_msg.split("\n")]
+            spacer = " " * len(self.defect_id)
+            self.log.info(f"{self.defect_id} - {pattern_name}: "
+                          f"Unable to find a generic pattern matching the description in list.")
+            self.log.info(f"{self.defect_id}   Description:")
+            for line in formatted_out_msg:
+                self.log.info(f"{spacer}   - {line}")
 
     def _substitute_matches(self, match: re.Match) -> typing.NoReturn:
         """
@@ -285,7 +356,7 @@ class DefectInfo:
         Returns: None
 
         """
-        msg = self.error_msg
+        mesg = self.error_msg
 
         # Iterate through regexp matched groups
         for data_type, str_match in match.groupdict().items():
@@ -293,21 +364,24 @@ class DefectInfo:
             # If user-specific data, strip the data from the msg and store in user_added_data.
             if data_type == MDExceptions.EXTRA:
                 if str_match is not None and str_match != '':
-                    msg = re.sub(str_match, '', msg)
+                    mesg = re.sub(str_match, '', mesg)
                     self.user_added_data = str_match
+                    updated_user_data = self.user_added_data.lstrip('\r\n \t')
+                    self.log.debug(f'{self.defect_id}: Extra info found --> "{updated_user_data}"')
 
             # If the match is not "None" - for optional match arguments e.g. - (?P<example>.*)?
             # Try to replace the data with a generic '<group_name>' element.
             elif str_match is not None:
                 data_type = data_type.split('_')[-1]
                 try:
-                    msg = re.sub(str_match, f'<{data_type}>', msg)
+                    mesg = re.sub(str_match, f'<{data_type}>', mesg)
+                    self.log.debug(f"{self.defect_id}: Substituted '{data_type}' for '{str_match}'.")
                 except re.error:
-                    if self._debug:
-                        print(f"Unable to substitute '{str_match}' to '<{data_type}>'")
+                    self.log.debug(f"{self.defect_id}: Unable to substitute '{str_match}' to '<{data_type}>'")
 
         # Replace the <CR>s (\n or \r\n) with single '\n' and store
-        self.general_error_msg = re.sub(re.compile(r'[\r\n]+'), r'\n', msg)
+        self.general_error_msg = re.sub(re.compile(r'[\r\n]+'), r'\n', mesg).strip('\r\n \t')
+        self.log.debug(f"{self.defect_id}: Final genericized msg: {self.general_error_msg}")
 
     @classmethod
     def _remove_control_characters(cls, string: str) -> str:
@@ -338,6 +412,7 @@ class Defects(list):
         """
         super().__init__()
         self.debug = debug
+        self.log = logging.getLogger(self.__class__.__name__)
         self.extend([DefectInfo(defect, debug=self.debug) for defect in issue_list])
 
     @property
@@ -445,6 +520,7 @@ class ExcelWorkbook:
                           f'{workbook_name}.{self.EXTENSION}')
         self.workbook = xlsxwriter.Workbook(self.wkbk_name)
         self._define_cell_formats()
+        self.log = logging.getLogger(self.__class__.__name__)
 
     def _define_cell_formats(self) -> typing.NoReturn:
         """
@@ -620,9 +696,8 @@ class ExcelWorkbook:
         self._set_column_widths(wksht, max_widths)
         self.freeze_header_row(worksheet=wksht)
 
-    @staticmethod
     def _find_max_col_widths(
-            col_entries: typing.List[typing.Any], widths: typing.List[int] = None,
+            self, col_entries: typing.List[typing.Any], widths: typing.List[int] = None,
             overrides: typing.List[int] = None) -> typing.List[int]:
         """
         Determines the longest entry (character width) per column, as data is added to each row.
@@ -651,6 +726,8 @@ class ExcelWorkbook:
         # Check each max value and adjust if greater than corresponding override value.
         for index, max_width in enumerate(max_widths, 0):
             if 0 < overrides[index] < max_width:
+                self.log.debug(f'Column {index} width override applied. '
+                               f'Width: {max_width} Override: {overrides[index]}')
                 max_widths[index] = overrides[index]
         return max_widths
 
@@ -680,12 +757,14 @@ class ExcelWorkbook:
 
         """
         self.workbook.close()
-        print(f"- Wrote XLSX file to: '{self.wkbk_name}'")
+        status = f"- Wrote XLSX file to: '{self.wkbk_name}'"
+        self.log.info(status)
+        print(status)
 
 
 def get_jira_issues(
         client: jira.JIRA, project: str, query: str, max_results: int,
-        start_date: str, stop_date: str) -> typing.List[jira.Issue]:
+        start_date: str, stop_date: str, logger: logging.Logger) -> typing.List[jira.Issue]:
     """
     Query the specified JIRA Project for issues that match JQL query. The routine will measure the time required
     to gather the data, so the processing performance can be monitored and improved as needed.
@@ -697,20 +776,28 @@ def get_jira_issues(
         max_results: Maximum number of results to return.
         start_date: Start date of query (CCYY-MM-DD formatted string)
         stop_date: Stop date of query (CCYY-MM-DD formatted string)
+        logger: Logging facility
 
     Returns:
         List of Jira Issues (jira.Issue)
 
     """
-    print(f"- Querying JIRA '{project}' project for all issues in 'To Do' in range of '{start_date}' to '{stop_date}'.",
-          end='', flush=True)
+    start_msg = (f"- Querying JIRA '{project}' project for all issues in 'To Do' in "
+                 f"range of '{start_date}' to '{stop_date}'.")
+    print(start_msg, end='', flush=True)
+    logger.info(start_msg)
+
     start_time = time.perf_counter()
     results = client.search_issues(jql_str=query, maxResults=max_results)
-    print(f" --> Complete. {len(results)} found. ({time.perf_counter() - start_time:0.2f} secs)")
+
+    stop_msg = f" --> Complete. {len(results)} found. ({time.perf_counter() - start_time:0.2f} secs)"
+    print(stop_msg)
+    logger.info(stop_msg)
+
     return results
 
 
-def connect_to_jira(url: str, user: str, password: str) -> jira.JIRA:
+def connect_to_jira(url: str, user: str, password: str, logger: logging.Logger) -> jira.JIRA:
     """
     Connects to Jira; tracks timing to connect.
 
@@ -718,16 +805,29 @@ def connect_to_jira(url: str, user: str, password: str) -> jira.JIRA:
         url: URL to connect to JIRA
         user: Username
         password: Password
+        logger: Logging facility
 
     Returns:
         Instantiated JIRA Client
 
     """
-    print(f"- Connecting to Jira... ", end='', flush=True)
+    start_msg = "- Connecting to Jira... "
+    print(start_msg, end='', flush=True)
+    logger.info(start_msg)
     start_time = time.perf_counter()
     client = jira.JIRA(url, basic_auth=(user, password))
-    print(f"Connected. ({time.perf_counter() - start_time:0.2f} secs)")
+    stop_msg = f"Connected. ({time.perf_counter() - start_time:0.2f} secs)"
+    print(stop_msg)
+    logger.info(stop_msg)
     return client
+
+
+def setup_logging(log_filename, log_level=logging.INFO):
+    logging.basicConfig(filename=log_filename,
+                        format='%(asctime)s : [%(levelname)s]: [%(name)s]: %(message)s',
+                        datefmt='%m%d%YT%H:%M:%S',
+                        level=log_level)
+    return logging.getLogger(__name__)
 
 
 if __name__ == '__main__':
@@ -749,29 +849,42 @@ if __name__ == '__main__':
            f'AND created <= {args.stop} '
            f'ORDER BY priority DESC, updated DESC')
 
+    filename = f"{PROJECT}_issues_{args.start}_to_{args.stop}"
+    xlsx_name = f"{filename}.{ExcelWorkbook.EXTENSION}"
+    log_name = f"{filename}.log"
+
+    log_level = logging.DEBUG if args.debug else logging.INFO
+    log = setup_logging(log_filename=log_name, log_level=log_level)
+    log.info("----------------- START -----------------")
+
     # Connect to Jira and query defects matching criteria
-    jira_client = connect_to_jira(url=URL, user=args.user, password=args.pswd)
+    jira_client = connect_to_jira(url=URL, user=args.user, password=args.pswd, logger=log)
     jira_issues = get_jira_issues(client=jira_client, project=PROJECT, query=JQL, max_results=args.max_results,
-                                  start_date=args.start, stop_date=args.stop)
+                                  start_date=args.start, stop_date=args.stop, logger=log)
 
     # Process and categorize the list of Jira defects
     start_processing = time.perf_counter()
     issues = Defects(jira_issues)
-    print(f"- Parsing of returned defects complete. ({time.perf_counter() - start_processing:0.2f} secs)")
+    msg = f"- Parsing of returned defects complete. ({time.perf_counter() - start_processing:0.2f} secs)"
+    log.info(msg)
+    print(msg)
 
     # Record results to Excel spreadsheet.
     start_processing = time.perf_counter()
-    xlsx_name = f"{PROJECT}_issues_{args.start}_to_{args.stop}.{ExcelWorkbook.EXTENSION}"
     xlsx = ExcelWorkbook(workbook_name=xlsx_name)
     xlsx.build_summary_sheet(issues.tally_defect_types())
     xlsx.build_detailed_table(issues.build_reporting_dict())
     xlsx.save()
-    print(f"- XLSX processing complete. ({time.perf_counter() - start_processing:0.2f} secs)")
+    msg = f"- XLSX processing complete. ({time.perf_counter() - start_processing:0.2f} secs)"
+    log.info(msg)
+    print(msg)
 
-    # Display summary of the exceptions and corresponding issue counts.
+    # Display summary of the exceptions and corresponding issue counts. This is not logged.
     total_count = 0
     print(f"\nResults:")
     for exc_type, count in sorted(issues.tally_defect_types().items(), key=lambda x: x[1], reverse=True):
         print(f"- '{exc_type}': {count}")
         total_count += count
     print(f"Total Issue Count: {total_count}")
+
+    log.info("----------------- STOP -----------------")
