@@ -270,7 +270,7 @@ class DefectInfo:
         Returns: Tuple(error_id, bug_id, version/build number)
 
         """
-        match = self.SUMMARY_PARSE.match(self.jira.fields.summary)
+        match = self.SUMMARY_PARSE.match(self.title)
         if match is not None:
             results = match.group('error'), match.group('bug_id'), match.group('version')
             self.log.debug(f"{self.defect_id}: Parsed summary: {results}")
