@@ -822,11 +822,22 @@ def connect_to_jira(url: str, user: str, password: str, logger: logging.Logger) 
     return client
 
 
-def setup_logging(log_filename, log_level=logging.INFO):
+def setup_logging(log_filename: str, logging_level=logging.INFO) -> logging.Logger:
+    """
+    Set up the logger (filename, msg preamble format, timestamps, etc.) for the tool.
+
+    :param log_filename: Name of file to write log msgs to...
+    :param logging_level: logging level (default=logging.INFO)
+
+    :return:
+        Instance of logging.Logger()
+
+    """
     logging.basicConfig(filename=log_filename,
                         format='%(asctime)s : [%(levelname)s]: [%(name)s]: %(message)s',
                         datefmt='%m%d%YT%H:%M:%S',
-                        level=log_level)
+                        level=logging_level)
+
     return logging.getLogger(__name__)
 
 
@@ -854,7 +865,7 @@ if __name__ == '__main__':
     log_name = f"{filename}.log"
 
     log_level = logging.DEBUG if args.debug else logging.INFO
-    log = setup_logging(log_filename=log_name, log_level=log_level)
+    log = setup_logging(log_filename=log_name, logging_level=log_level)
     log.info("----------------- START -----------------")
 
     # Connect to Jira and query defects matching criteria
