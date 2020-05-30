@@ -340,9 +340,9 @@ class DefectInfo:
         if match is None and len(patterns) > 0:
             formatted_out_msg = [f"\t{line}" for line in self.error_msg.split("\n")]
             spacer = " " * len(self.defect_id)
-            self.log.info(f"{self.defect_id} - {pattern_name}: "
-                          f"Unable to find a generic pattern matching the description in list.")
-            self.log.info(f"{self.defect_id}   Description:")
+            self.log.warning(f"{self.defect_id} - {pattern_name}: "
+                             f"Unable to find a generic pattern matching the description in list.")
+            self.log.warning(f"{self.defect_id}   Description:")
             for line in formatted_out_msg:
                 self.log.info(f"{spacer}   - {line}")
 
