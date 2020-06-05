@@ -248,8 +248,10 @@ class ELFLogParser:
         data_tuple = self._tuples.get_tuple_definition(section)
 
         raw_data = self.get_section(section, raw=True)
+        header_delimiter_row = 0
         for line in raw_data:
-            if self.COLUMN_DELIMITER not in line:
+            if self.COLUMN_DELIMITER not in line or header_delimiter_row < 2:
+                header_delimiter_row += 1
                 continue
             parts = [x.strip() for x in line.strip().split(self.COLUMN_DELIMITER)][1:-1]
             parsed_data.append(data_tuple(**dict(
@@ -349,9 +351,11 @@ if __name__ == '__main__':
 
     elf_file = sys.argv[2] if len(sys.argv) > 1 else local_elf_file
 
-    target_section = ELFLogSections.NETWORK
+    target_section = ELFLogSections.MODULES
 
     parser = ELFLogParser(elf_file)
     print(f"{ELFLogSections.list_sections()}\n")
     print(f"EVERYTHING:\n{pprint.pformat(parser.get_all_sections())}")
-    print(f"SECTION: {target_section}\n{'-' * 80}\n{pprint.pformat(parser.get_section(target_section))}")
+    print(f"SECTION: {target_section}\n"
+          f"{'-' * 80}\n"
+          f"{pprint.pformat(parser.get_section(target_section))}")
