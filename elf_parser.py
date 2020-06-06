@@ -227,18 +227,33 @@ class ELFDataTuples:
 
 
 class ELFLogParser:
+    """
+    This is the primary logic for parsing the ELF logs. Many routines are generalized (as the section formats are
+    identical. It executes the parsing routines based on the sections defined in the ELFLogSections class.
+    Most methods are private (to simplify use).
 
+    get_section: Get a specific ELF log section, using the section names defined in the ELFLogSections class.
+            - raw (bool): True:  the raw text in the section of the log.
+                          False (default): the processed list/dictionary of text, stored in specialized NamedTuples
+    get_all_section: Get the entire log, returned a dictionary. Key =  the section names defined in ELFLogSections
+             - raw (bool): True:  the raw text in the section of the log.
+                          False (default): the processed list/dictionary of text, stored in specialized NamedTuples
+    """
     SECTION_NAME = 'section_name'
     ATTRIBUTE = 'attribute'
     DATA = 'data'
     COLUMN_DELIMITER = '|'
 
-    # GENERAL LOG PATTERN
+    # GENERAL LOG PATTERNS
     LOG_SECTION_DELIMITER = re.compile(r'^(?P<section_name>[\w\s\d]+):[\r\n]')
     TABLE_DELIMITER = re.compile(r'^[|]*-{20,}')
     DATA_LINE_PATTERN = re.compile(r'^\s*[\d.]+\s+(?P<attribute>.*?)\s*:\s*(?P<data>.*)?')
 
     def __init__(self, log_file: str) -> typing.NoReturn:
+        """
+        Initialize the object and parse the file.
+        :param log_file: ELF Log file to parse.
+        """
         self.log_file = log_file
         self._tuples = ELFDataTuples()
 
@@ -247,57 +262,130 @@ class ELFLogParser:
         self._parsed_sections = self._parse_elf_sections()
 
     def _read_file(self) -> typing.List[str]:
+        """
+        Read the file.
+
+        :return: List of lines from the file.
+        """
         with open(self.log_file, "r", encoding='utf8') as ELF:
             return ELF.readlines()
 
     def _parse_raw_sections(self) -> typing.Dict[str, typing.List[str]]:
+        """
+        Sort the log file lines into lists, based on the section name.
+
+        :return: Dictionary of lists:
+            key: section name, value: list of lines in the that section.
+
+        """
         sections = {}
         current_section = None
         for line in self._contents:
+
+            # Check for a section header. If found, add it to dictionary: key: section_name, value: empty list
+            # Also store the section name as current section name. All subsequent lines will be added to the
+            # current section list until another section name is detected.
             match = self.LOG_SECTION_DELIMITER.search(line)
             if match is not None:
                 current_section = match.group(self.SECTION_NAME)
                 sections[current_section] = []
+
             elif current_section is not None:
                 sections[current_section].append(line.strip())
+
         return sections
 
     def _parse_elf_sections(self) -> typing.Dict[str, typing.Any]:
+        """
+        For each section name listed in the ELFLogSection class, call the corresponding section's line parsing routine.
+        Each log line parsing routine is responsible for providing the data.
+
+        :return: Dictionary of lists of namedTuples per section.
+            key: section_name value: list of namedtuples containing parsed data
+                     (namedtuple definitions are specific to each section)
+
+        """
         sections = {}
         for section_name in dataclasses.asdict(ELFLogSections()).keys():
             name = re.sub(r'\s+', '_', getattr(ELFLogSections, section_name)).lower()
             method_name = f'_parse_{name}_section'
+
+            # If there is a method for parsing the specific section, call it.
             if hasattr(self, method_name):
                 method = getattr(self, method_name)
+
+                # If the method name exists in the class but is not callable (e.g. - stubbing var):
+                # return an empty dictionary.
                 sections[name] = method() if callable(method) else {}
+
+            # No method found, so the section is not supported. (Thus needs to have support added).
             else:
                 print(f"No method found for: {method_name}")
+
         return sections
 
     def get_section(self, section_name: str, raw: bool = False) -> typing.Any:
+        """
+        Get a specific ELF report section.
+
+        :param section_name: Name of the desired section (use ELFLogSection class attributes)
+        :param raw: (bool) - True: return list of unparsed section log lines
+                             False: return list of parsed section log lines (namedtuples).
+
+        :raises: SectionNotFound
+
+        :return: List of lines or namedTuples corresponding to the section provided.
+
+        """
         data = self._raw_sections if raw else self._parsed_sections
+
+        # If the section name is not in the data, replace mid-line spaces with underscores, in case the actual
+        # section name was provided, rather than the ELFLogSection attribute.
         if section_name not in data:
             section_name = self._replace_space_with_char(section_name, "_").lower()
 
+        # Get the data, if present
         if section_name in data:
             return data.get(section_name)
+
         raise SectionNotFound(section_name)
 
-    def get_all_sections(self) -> typing.Dict[str, typing.Any]:
-        return self._parsed_sections
+    def get_all_sections(self, raw=False) -> typing.Dict[str, typing.Any]:
+        """
+        Return all sections.
+
+        :param: raw: (bool) - True: return list of unparsed section log lines
+                              False: return list of parsed section log lines (namedtuples).
+
+        :return: dictionary of all sections key: section_name, value: dict/list of data
+
+        """
+        return self._raw_sections if raw else self._parsed_sections
 
     def _parse_call_stack_information_section(self) -> typing.Dict[str, typing.Any]:
+        """
+        Internal parsing routine for CALL STACK INFORMATION section.
+
+        :return:
+            Dictionary of data:
+                2 sets of key/values:
+                + summary: string of stack summary (first portion of section table)
+                + stack: list of stack trace calls (namedtuple per row: attributes = columns in table)
+        """
         summary_section = 'summary'
         stack_section = 'stack'
         table_delimiter_count = 0
-        stack_trace_summary_section = 2
-        stack_trace_table_section = 3
+        stack_trace_summary_section = 2  # After second table delimiter, stack summary starts
+        stack_trace_table_section = 3    # After third table delimiter, call stack starts
+
         parsed_data = {summary_section: '', stack_section: []}
 
+        # Get the raw data for the section
         section = ELFLogSections.CALL_STACK_INFORMATION
         raw_data = self.get_section(section, raw=True)
 
         for index, line in enumerate(raw_data):
+
             # Check for table section delimiter (and count how many instances currently encountered)
             match = self.TABLE_DELIMITER.search(line)
             if match is not None:
@@ -311,60 +399,152 @@ class ELFLogParser:
 
             # Stack Trace Table section
             stack_trace_tuple = self._tuples.get_tuple_definition(section)
+
+            # For each line, create a list of elements, by breaking apart line on the delimiters Then pair each element
+            # with the column header.
+            # Column order specified in: ELFDataTuples.definition[section_name][elements] list
             if table_delimiter_count == stack_trace_table_section:
-                stack_elements = [elem.strip(f' {self.COLUMN_DELIMITER}') for elem in line.split(self.COLUMN_DELIMITER)
-                                  if elem != '']
+                stack_elements = [
+                    elem.strip(f' {self.COLUMN_DELIMITER}') for elem in line.split(self.COLUMN_DELIMITER) if elem != ''
+                ]
                 parsed_data[stack_section].append(stack_trace_tuple(
                     **dict([(k, v) for k, v in zip(self._tuples.get_attribute_list(section), stack_elements)])))
 
         return parsed_data
 
     def _parse_modules_information_section(self) -> typing.List[namedtuple]:
+        """
+        Parse the MODULES INFORMATION section, which is a common format table.
+
+        :return: List of section specific namedtuples, 1 namedtuple per row.
+
+        """
         return self._parse_table(ELFLogSections.MODULES)
 
     def _parse_processes_information_section(self) -> typing.List[namedtuple]:
+        """
+        Parse the MODULES INFORMATION section, which is a common format table.
+
+        :return: List of section specific namedtuples, 1 namedtuple per row.
+
+        """
         return self._parse_table(ELFLogSections.PROCESSES_INFORMATION)
 
     def _parse_table(self, section: str) -> typing.List[namedtuple]:
+        """
+        Generic ELF log table parsing routine.
+
+        :param section: Name of section to parse
+
+        :return: List of section specific namedtuples, 1 namedtuple per row.
+
+        """
         parsed_data = []
         data_tuple = self._tuples.get_tuple_definition(section)
 
+        # Get section raw data
         raw_data = self.get_section(section, raw=True)
         header_delimiter_row = 0
+
         for line in raw_data:
+            # The tables have a header column, so move to the next line if the second section header delimiter row has
+            # not been parsed, and skip any subsequent row that does not have a column/data delimiter.
+            # (possible additional sections or the end of the table).
             if self.COLUMN_DELIMITER not in line or header_delimiter_row < 2:
                 header_delimiter_row += 1
                 continue
+
+            # For each line, create a list of elements, by breaking apart line on the delimiters Then pair each element
+            # with the column header.
+            # Column order specified in: ELFDataTuples.definition[section_name][elements] list.
+            # NOTE: Splicing: [1:-1] -> On splitting the line with the delimiter, the first and last elements of the
+            # list are '' since there was no character before the first or after the last. These are not data columns,
+            # so they can be removed from the list.
             parts = [x.strip() for x in line.strip().split(self.COLUMN_DELIMITER)][1:-1]
             parsed_data.append(data_tuple(**dict(
                 [(k, v) for k, v in zip(self._tuples.get_attribute_list(section), parts)])))
+
         return parsed_data
 
     def _parse_exception_section(self) -> namedtuple:
+        """
+        Parse the EXCEPTION section of the ELF Log data.
+
+        :return: List of section-specific namedtuples. One namedtuple per line.
+
+        """
         return self._parse_general_section(section=ELFLogSections.EXCEPTION)
 
     def _parse_active_controls_section(self) -> namedtuple:
+        """
+        Parse the ACTIVE_CONTROL section of the ELF Log data.
+
+        :return: List of section-specific namedtuples. One namedtuple per line.
+
+        """
         return self._parse_general_section(section=ELFLogSections.ACTIVE_CONTROLS)
 
     def _parse_computer_section(self) -> namedtuple:
+        """
+        Parse the COMPUTER section of the ELF Log data.
+
+        :return: List of section-specific namedtuples. One namedtuple per line.
+
+        """
         return self._parse_general_section(section=ELFLogSections.COMPUTER)
 
     def _parse_user_section(self) -> namedtuple:
+        """
+        Parse the USER section of the ELF Log data.
+
+        :return: List of section-specific namedtuples. One namedtuple per line.
+
+        """
         return self._parse_general_section(section=ELFLogSections.USER)
 
     def _parse_application_section(self) -> namedtuple:
+        """
+        Parse the APPLICATION section of the ELF Log data.
+
+        :return: List of section-specific namedtuples. One namedtuple per line.
+
+        """
         return self._parse_general_section(section=ELFLogSections.APPLICATION)
 
     def _parse_operating_system_section(self) -> namedtuple:
+        """
+        Parse the OPERATING SYSTEM section of the ELF Log data.
+
+        :return: List of section-specific namedtuples. One namedtuple per line.
+
+        """
         return self._parse_general_section(section=ELFLogSections.OPERATING_SYSTEM)
 
     def _parse_registers_section(self) -> namedtuple:
+        """
+        Parse the REGISTERS section of the ELF Log data.
+
+        :return: List of section-specific namedtuples. One namedtuple per line.
+
+        """
         return self._parse_general_section(section=ELFLogSections.REGISTERS)
 
     def _parse_assembler_information_section(self) -> namedtuple:
+        """
+        Parse the ASSEMBLER INFORMATION section of the ELF Log data.
+
+        :return: List of section-specific namedtuples. One namedtuple per line.
+
+        """
         return self._parse_general_section(section=ELFLogSections.ASSEMBLER_INFORMATION)
 
     def _parse_general_section(self, section: str) -> namedtuple:
+        """
+        Generic section parsing routine. Many sections in the ELF log have the same basic format.
+
+        :return: List of section-specific namedtuples. One namedtuple per line.
+
+        """
         data_dict = {}
 
         # Get section data named tuple
@@ -397,46 +577,89 @@ class ELFLogParser:
         return data_tuple(**data_dict)
 
     def _parse_network_section(self) -> typing.List[namedtuple]:
+        """
+        Parse the NETWORK section of the ELF log. This section contains a different format than all other sections.
+
+        :return: List of namedtuples, one per interface (column). Attributes are defined 1 per row.
+
+        """
         section = ELFLogSections.NETWORK
+        temp_data = {}
+
+        # Get the NETWORK sections namedtuple
         data_tuple = self._tuples.get_tuple_definition(section)
 
-        temp_data = {}
+        # Get the network section raw data
         raw_data = self.get_section(section, raw=True)
-        number_of_interfaces = 0
+
+        number_of_interfaces = 0  # The number of interfaces is based on the number of columns in the table.
+
+        # Each row in the table is different attribute, common to all named tuples.
+        # Parse each line into a dict of lists. key:attribute, value:list of values per attribute
+        # (each element will map to a different interface)
         for line in raw_data:
             match = self.DATA_LINE_PATTERN.search(line)
             if match is not None:
+                # Process the attribute name
                 name = self._replace_space_with_char(match.group(self.ATTRIBUTE).lower(), "_")
+
+                # Parse each column value into the row's list
                 results = [x.strip() for x in match.group(self.DATA).split(' ')
                            if (x.strip() != '' and x.strip() != '-')]
+
+                # The number of interfaces is equal to the number of parsed columns
                 number_of_interfaces = len(results)
                 temp_data[name] = results
 
         # Initialize tuple args list: number of tuples = number of interfaces
         tuple_args_dicts = [{} for _ in range(0, number_of_interfaces)]
 
+        # For each interface, get the interface's attribute name and value.
+        # Example: interface 0 will get the 0th element of each attribute.
+        # Store in a list of dictionaries. Each dictionary is an interface: key: attribute value: attribute value.
         for tuple_number in range(0, number_of_interfaces):
             for key, values in temp_data.items():
                 tuple_args_dicts[tuple_number][key] = values[tuple_number]
 
+        # Build a list of NetworkElement namedtuples, one per interface
         return [data_tuple(**tuple_args_dict) for tuple_args_dict in tuple_args_dicts]
 
     @staticmethod
     def _replace_space_with_char(string: str, char: str) -> str:
+        """
+        Convenience method for replacing space characters ('\\s', '\\t') with different character(s).
+        Typically used to translate log report attribute names into python allowable variables
+        (e.g. - replace spaces with underscores).
+
+        :param string: String to process
+        :param char: Character(s) used to replace spaces.
+
+        :return: String without space characters.
+
+        """
         return re.sub(r'\s+', char, string)
 
 
 if __name__ == '__main__':
+    """
+    Basic manual testing routine.
+    Specify name of ELF log filespec as arg: ./elf_parser.py <ELF LOGFILE FILESPEC>
+    """
+
     import sys
-    local_elf_file = ".\\elf logs\\BugReport_0A850000_20200511142348.el"
-    # local_elf_file = ".\\elf logs\\BugReport_BC100000_20200522114153.el"
+    local_elf_file = ".\\elf logs\\BugReport_0A850000_20200511142348.el"    # Default ELF if not specified
+    # local_elf_file = ".\\elf logs\\BugReport_BC100000_20200522114153.el"  # Default ELF if not specified
 
     elf_file = sys.argv[2] if len(sys.argv) > 1 else local_elf_file
 
+    # Section to test/verify
     target_section = ELFLogSections.MODULES
 
+    # Read the file, list all sections defined in the ELFLogSections
     parser = ELFLogParser(elf_file)
     print(f"{ELFLogSections.list_sections()}\n")
+
+    # List everything, then list section specific parsed data.
     print(f"EVERYTHING:\n{pprint.pformat(parser.get_all_sections())}")
     print(f"SECTION: {target_section}\n"
           f"{'-' * 80}\n"
