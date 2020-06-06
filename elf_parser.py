@@ -232,19 +232,26 @@ class ELFLogParser:
     identical. It executes the parsing routines based on the sections defined in the ELFLogSections class.
     Most methods are private (to simplify use).
 
+    get_section_names_found: Get the list of sections found in the specified ELF log file.
+            - raw (bool): True: the sections found while dividing the raw text into sections.
+                          False (default): the sections parsed into data structures.
+
     get_section: Get a specific ELF log section, using the section names defined in the ELFLogSections class.
-            - raw (bool): True:  the raw text in the section of the log.
+            - raw (bool): True: the raw text in the section of the log.
                           False (default): the processed list/dictionary of text, stored in specialized NamedTuples
+
     get_all_section: Get the entire log, returned a dictionary. Key =  the section names defined in ELFLogSections
-             - raw (bool): True:  the raw text in the section of the log.
-                          False (default): the processed list/dictionary of text, stored in specialized NamedTuples
+             - raw (bool): True: the raw text in the section of the log.
+                           False (default): the processed list/dictionary of text, stored in specialized NamedTuples
+
     """
+    # Commonly used class variables
     SECTION_NAME = 'section_name'
     ATTRIBUTE = 'attribute'
     DATA = 'data'
     COLUMN_DELIMITER = '|'
 
-    # GENERAL LOG PATTERNS
+    # General Log Regexp Patterns
     LOG_SECTION_DELIMITER = re.compile(r'^(?P<section_name>[\w\s\d]+):[\r\n]')
     TABLE_DELIMITER = re.compile(r'^[|]*-{20,}')
     DATA_LINE_PATTERN = re.compile(r'^\s*[\d.]+\s+(?P<attribute>.*?)\s*:\s*(?P<data>.*)?')
@@ -323,6 +330,18 @@ class ELFLogParser:
                 print(f"No method found for: {method_name}")
 
         return sections
+
+    def get_section_names_found(self, raw: bool = False) -> typing.List[str]:
+        """
+        Return the list of sections found in the parsed ELF file.
+
+        :param raw: Boolean: True: return list of sections found when breaking the data into sections.
+                             False (default): return list of sections found when parsing the sections.
+
+        :return: List of sections (str) found.
+
+        """
+        return list(self._raw_sections.keys()) if raw else list(self._parsed_sections.keys())
 
     def get_section(self, section_name: str, raw: bool = False) -> typing.Any:
         """
