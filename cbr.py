@@ -5,6 +5,8 @@ import time
 import typing
 import unicodedata
 
+import elf_parser
+
 import jira
 import xlsxwriter
 from xlsxwriter.worksheet import Worksheet
@@ -216,6 +218,8 @@ class DefectInfo:
         r'\s+v(?P<version>[\d.]+)\)',
         re.IGNORECASE)
 
+    ELF_LOG_EXTENSION = 'el'
+
     def __init__(self, jira_issue: jira.Issue, debug: bool = False) -> typing.NoReturn:
         """
         Initialize the object and parse the relevant data/fields.
@@ -234,6 +238,7 @@ class DefectInfo:
 
         self.exception_type, self.bug_id, self.version = self._parse_summary()
         self._parse_metadata()
+        self._elf_contents_obj = elf_parser.ELFLogParser(binary_content=self._get_elf_attachment())
 
     @property
     def defect_id(self) -> str:
@@ -248,6 +253,10 @@ class DefectInfo:
         Returns: (str) - Defect title
         """
         return self.jira.fields.summary
+
+    @property
+    def elf_log_model(self) -> elf_parser.ELFLogParser:
+        return self._elf_contents_obj
 
     def __str__(self) -> str:
         """
@@ -396,6 +405,18 @@ class DefectInfo:
 
         """
         return "".join(character for character in string if unicodedata.category(character).lower() != "cf")
+
+    def _get_elf_attachment(self) -> str:
+        """
+        Get elf file attachment name, download the attachment and return the stream as a string.
+
+        :return: String of attachment contents.
+
+        """
+        for attachment in self.jira.fields.attachment:
+            if attachment.filename.endswith(self.ELF_LOG_EXTENSION):
+                return str(attachment.get())
+        return ''
 
 
 class Defects(list):
@@ -788,7 +809,8 @@ def get_jira_issues(
     logger.info(start_msg)
 
     start_time = time.perf_counter()
-    results = client.search_issues(jql_str=query, maxResults=max_results)
+    results = client.search_issues(jql_str=query, maxResults=max_results,
+                                   fields='key, description, attachment, summary')
 
     stop_msg = f" --> Complete. {len(results)} found. ({time.perf_counter() - start_time:0.2f} secs)"
     print(stop_msg)
@@ -876,7 +898,8 @@ if __name__ == '__main__':
     # Process and categorize the list of Jira defects
     start_processing = time.perf_counter()
     issues = Defects(jira_issues)
-    msg = f"- Parsing of returned defects complete. ({time.perf_counter() - start_processing:0.2f} secs)"
+    msg = (f"- Parsing of returned defects and attachments complete. "
+           f"({time.perf_counter() - start_processing:0.2f} secs)")
     log.info(msg)
     print(msg)
 

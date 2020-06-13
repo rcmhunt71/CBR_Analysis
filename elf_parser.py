@@ -1,11 +1,14 @@
 from collections import namedtuple
 import dataclasses
-import pprint
 import re
 import typing
 
 
 class SectionNotFound(Exception):
+    pass
+
+
+class UnableToParseELFLog(Exception):
     pass
 
 
@@ -252,11 +255,11 @@ class ELFLogParser:
     COLUMN_DELIMITER = '|'
 
     # General Log Regexp Patterns
-    LOG_SECTION_DELIMITER = re.compile(r'^(?P<section_name>[\w\s\d]+):[\r\n]')
-    TABLE_DELIMITER = re.compile(r'^[|]*-{20,}')
-    DATA_LINE_PATTERN = re.compile(r'^\s*[\d.]+\s+(?P<attribute>.*?)\s*:\s*(?P<data>.*)?')
+    LOG_SECTION_DELIMITER = re.compile(r'^(?P<section_name>\w[\w\d\s]+):[\r\n]*')
+    TABLE_DELIMITER = re.compile(r'^[|]*-{12,}')
+    DATA_LINE_PATTERN = re.compile(r'^\s*\d+\.\d+\s+(?P<attribute>.*?)\s*:\s*(?P<data>.*)?')
 
-    def __init__(self, log_file: str) -> typing.NoReturn:
+    def __init__(self, log_file: str = '', binary_content: str = '') -> None:
         """
         Initialize the object and parse the file.
         :param log_file: ELF Log file to parse.
@@ -264,7 +267,13 @@ class ELFLogParser:
         self.log_file = log_file
         self._tuples = ELFDataTuples()
 
-        self._contents = self._read_file()
+        if self.log_file != '':
+            self._contents = self._read_file()
+        elif binary_content != '':
+            self._contents = self._process_data_stream(binary_content)
+        else:
+            raise UnableToParseELFLog('No ELF log filename or file contents provided.')
+
         self._raw_sections = self._parse_raw_sections()
         self._parsed_sections = self._parse_elf_sections()
 
@@ -276,6 +285,19 @@ class ELFLogParser:
         """
         with open(self.log_file, "r", encoding='utf8') as ELF:
             return ELF.readlines()
+
+    @staticmethod
+    def _process_data_stream(stream: str) -> typing.List[str]:
+        """
+        Remove binary prefix in ELF log contents.
+
+        :param stream: Data stream from getting attachment from Jira.
+
+        :return: List of lines in file.
+
+        """
+        index = stream.find("Eureka")
+        return [x for x in stream[index:].split('\\r\\n')]
 
     def _parse_raw_sections(self) -> typing.Dict[str, typing.List[str]]:
         """
@@ -603,6 +625,7 @@ class ELFLogParser:
 
         """
         section = ELFLogSections.NETWORK
+
         temp_data = {}
 
         # Get the NETWORK sections namedtuple
@@ -665,9 +688,13 @@ if __name__ == '__main__':
     Specify name of ELF log filespec as arg: ./elf_parser.py <ELF LOGFILE FILESPEC>
     """
 
+    import pprint
     import sys
-    local_elf_file = ".\\elf logs\\BugReport_0A850000_20200511142348.el"    # Default ELF if not specified
-    # local_elf_file = ".\\elf logs\\BugReport_BC100000_20200522114153.el"  # Default ELF if not specified
+
+    # Default ELF if not specified
+    # local_elf_file = ".\\elf logs\\BugReport_0A850000_20200511142348.el"
+    # local_elf_file = ".\\elf logs\\BugReport_BC100000_20200522114153.el"
+    local_elf_file = ".\\elf logs\\BugReport_2AFD0000_20200601151912.el"
 
     elf_file = sys.argv[2] if len(sys.argv) > 1 else local_elf_file
 
