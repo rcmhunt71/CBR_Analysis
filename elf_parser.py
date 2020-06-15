@@ -60,7 +60,7 @@ class ELFDataTuples:
     reserved_names = 'reserved_names'
     named_tuple = 'named_tuple'
     illegal_varible_name_characters = ['#', '/', '-', '.', '$', '\\', '@', '*', '(', ')', '&', '^', '<', '>', '?',
-                                       ',', '!', "'", '~', '`', '[', ']', '{', '}', '|', '+', '=']
+                                       ',', '!', "'", '~', '`', '[', ']', '{', '}', '|', '+', '=', ':', ';']
 
     definitions = {
         ELFLogSections.CALL_STACK_INFORMATION: {
