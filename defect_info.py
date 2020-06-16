@@ -1,7 +1,12 @@
+import logging
+import re
+import typing
 import unicodedata
 
 import elf_parser
 from md_exceptions import MDExceptions
+
+import jira
 
 
 # Directive to avoid typing issues with Jira objects
