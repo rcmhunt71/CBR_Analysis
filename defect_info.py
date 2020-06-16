@@ -4,7 +4,7 @@ import typing
 import unicodedata
 
 import elf_parser
-from md_exceptions import MDExceptions
+from md_exceptions_regexp import MDExceptions
 
 import jira
 
