@@ -1,10 +1,11 @@
 import argparse
 import logging
+import os
 import time
 
-from defects_list import Defects
-from excel_reports import ExcelWorkbook
-from md_jira import connect_to_jira, get_jira_issues
+from MDCBR.defects.defects_list import Defects
+from MDCBR.reporting.excel_reports import ExcelWorkbook
+from MDCBR.md.md_jira import connect_to_jira, get_jira_issues
 
 
 class CommandLineOptions:
@@ -53,6 +54,7 @@ if __name__ == '__main__':
     PROJECT = 'CBR'
     STATUS = ['"To Do"']
     URL = 'https://jira.pclender.com'
+    REPORT_DIR = 'reports'
 
     # Get the CLI arguments
     cli = CommandLineOptions()
@@ -66,8 +68,8 @@ if __name__ == '__main__':
            f'ORDER BY priority DESC, updated DESC')
 
     filename = f"{PROJECT}_issues_{args.start}_to_{args.stop}"
-    xlsx_name = f"{filename}.{ExcelWorkbook.EXTENSION}"
-    log_name = f"{filename}.log"
+    xlsx_name = os.path.sep.join([REPORT_DIR, f"{filename}.{ExcelWorkbook.EXTENSION}"])
+    log_name = os.path.sep.join([REPORT_DIR, f"{filename}.log"])
 
     log_level = logging.DEBUG if args.debug else logging.INFO
     log = setup_logging(log_filename=log_name, logging_level=log_level)

@@ -156,7 +156,7 @@ class ELFDataTuples:
         """
         for section_name in self.definitions:
             self.definitions[section_name][self.named_tuple] = namedtuple(
-                self._build_tuple_name(section_name), self.get_attribute_list(section_name))
+                self._build_tuple_name(section_name), self.get_elf_section_attribute_list(section_name))
 
     @staticmethod
     def _build_tuple_name(section: str) -> str:
@@ -196,16 +196,17 @@ class ELFDataTuples:
         """
         return self.definitions[section][self.reserved_names]
 
-    def get_attribute_list(self, section: str) -> typing.List[str]:
+    @classmethod
+    def get_elf_section_attribute_list(cls, section: str) -> typing.List[str]:
         """
-        Return the list of report (tuple) attributes for a given section.
+        Return the list of report attributes (namedtuple attributes) for a given section.
 
         :param section: Name of section.
 
         :return: List of report (tuple) attributes for the provided section.
 
         """
-        return self.definitions[section][self.elements]
+        return cls.definitions[section][cls.elements]
 
     def remove_illegal_characters(self, string: str) -> str:
         """
@@ -253,6 +254,8 @@ class ELFLogParser:
     ATTRIBUTE = 'attribute'
     DATA = 'data'
     COLUMN_DELIMITER = '|'
+    STACK_SECTION = 'stack'
+    SUMMARY_SECTION = 'summary'
 
     # General Log Regexp Patterns
     LOG_SECTION_DELIMITER = re.compile(r'^(?P<section_name>\w[\w\d\s]+):[\r\n]*')
@@ -413,13 +416,11 @@ class ELFLogParser:
                 + summary: string of stack summary (first portion of section table)
                 + stack: list of stack trace calls (namedtuple per row: attributes = columns in table)
         """
-        summary_section = 'summary'
-        stack_section = 'stack'
         table_delimiter_count = 0
         stack_trace_summary_section = 2  # After second table delimiter, stack summary starts
         stack_trace_table_section = 3    # After third table delimiter, call stack starts
 
-        parsed_data = {summary_section: '', stack_section: []}
+        parsed_data = {self.SUMMARY_SECTION: '', self.STACK_SECTION: []}
 
         # Get the raw data for the section
         section = ELFLogSections.CALL_STACK_INFORMATION
@@ -436,7 +437,7 @@ class ELFLogParser:
             # Stack Trace Summary section
             if table_delimiter_count == stack_trace_summary_section:
                 cleaned_line = line.strip(f' {self.COLUMN_DELIMITER}')
-                parsed_data[summary_section] += f"{cleaned_line}\n"
+                parsed_data[self.SUMMARY_SECTION] += f"{cleaned_line}\n"
 
             # Stack Trace Table section
             stack_trace_tuple = self._tuples.get_tuple_definition(section)
@@ -448,8 +449,9 @@ class ELFLogParser:
                 stack_elements = [
                     elem.strip(f' {self.COLUMN_DELIMITER}') for elem in line.split(self.COLUMN_DELIMITER) if elem != ''
                 ]
-                parsed_data[stack_section].append(stack_trace_tuple(
-                    **dict([(k, v) for k, v in zip(self._tuples.get_attribute_list(section), stack_elements)])))
+                parsed_data[self.STACK_SECTION].append(stack_trace_tuple(
+                    **dict([(k, v) for k, v in
+                            zip(self._tuples.get_elf_section_attribute_list(section), stack_elements)])))
 
         return parsed_data
 
@@ -503,7 +505,7 @@ class ELFLogParser:
             # so they can be removed from the list.
             parts = [x.strip() for x in line.strip().split(self.COLUMN_DELIMITER)][1:-1]
             parsed_data.append(data_tuple(**dict(
-                [(k, v) for k, v in zip(self._tuples.get_attribute_list(section), parts)])))
+                [(k, v) for k, v in zip(self._tuples.get_elf_section_attribute_list(section), parts)])))
 
         return parsed_data
 
@@ -591,7 +593,7 @@ class ELFLogParser:
         # Get section data named tuple
         data_tuple = self._tuples.get_tuple_definition(section)
 
-        if not self._tuples.get_attribute_list(section):
+        if not self._tuples.get_elf_section_attribute_list(section):
             return data_tuple()
 
         raw_data = [line.strip() for line in self.get_section(section, raw=True) if line.strip() != '']
@@ -694,7 +696,7 @@ if __name__ == '__main__':
     # Default ELF if not specified
     # local_elf_file = ".\\elf logs\\BugReport_0A850000_20200511142348.el"
     # local_elf_file = ".\\elf logs\\BugReport_BC100000_20200522114153.el"
-    local_elf_file = ".\\elf logs\\BugReport_2AFD0000_20200601151912.el"
+    local_elf_file = "../../elf logs/BugReport_2AFD0000_20200601151912.el"
 
     elf_file = sys.argv[2] if len(sys.argv) > 1 else local_elf_file
 

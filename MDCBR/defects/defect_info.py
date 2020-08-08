@@ -3,8 +3,8 @@ import re
 import typing
 import unicodedata
 
-import elf_parser
-from md_exceptions_regexp import MDExceptions
+import MDCBR.elf.elf_parser as elf_parser
+from MDCBR.md.md_exceptions_regexp import MDExceptions
 
 import jira
 

@@ -1,7 +1,7 @@
 import logging
 import typing
 
-from defect_info import DefectInfo
+from MDCBR.defects.defect_info import DefectInfo
 
 import jira
 
