@@ -333,8 +333,8 @@ class ELFLogParser:
         Each log line parsing routine is responsible for providing the data.
 
         :return: Dictionary of lists of namedTuples per section.
-            key: section_name value: list of namedtuples containing parsed data
-                     (namedtuple definitions are specific to each section)
+            key: section_name
+            value: list of namedtuples containing parsed data (namedtuple definitions are specific to each section)
 
         """
         sections = {}
@@ -386,7 +386,7 @@ class ELFLogParser:
         # If the section name is not in the data, replace mid-line spaces with underscores, in case the actual
         # section name was provided, rather than the ELFLogSection attribute.
         if section_name not in data:
-            section_name = self._replace_space_with_char(section_name, "_").lower()
+            section_name = self.convert_section_type_to_key(section_name)
 
         # Get the data, if present
         if section_name in data:
@@ -682,6 +682,18 @@ class ELFLogParser:
 
         """
         return re.sub(r'\s+', char, string)
+
+    @classmethod
+    def convert_section_type_to_key(cls, section_name: str) -> str:
+        """
+        Convert the Section Constants to a parsed_data dictionary key
+
+        :param section_name: String Constant defined in ELFLogSections
+
+        :return: (str)  - replaced spaces with strings and convert to lowercase.
+
+        """
+        return cls._replace_space_with_char(section_name, "_").lower()
 
 
 if __name__ == '__main__':

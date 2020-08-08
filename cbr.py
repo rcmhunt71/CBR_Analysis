@@ -4,8 +4,11 @@ import os
 import time
 
 from MDCBR.defects.defects_list import Defects
-from MDCBR.reporting.excel_reports import ExcelWorkbook
 from MDCBR.md.md_jira import connect_to_jira, get_jira_issues
+from MDCBR.reporting.excel_reports import ExcelWorkbook
+
+import MDCBR.debug.dump as debug
+from MDCBR.elf.elf_parser import ELFLogSections
 
 
 class CommandLineOptions:
@@ -84,7 +87,7 @@ if __name__ == '__main__':
     start_processing = time.perf_counter()
     issues = Defects(jira_issues)
     msg = (f"- Parsing of returned defects and attachments complete. "
-           f"({time.perf_counter() - start_processing:0.2f} secs)")
+           f"({time.perf_counter() - start_processing:0.3f} secs)")
     log.info(msg)
     print(msg)
 
@@ -94,7 +97,7 @@ if __name__ == '__main__':
     xlsx.build_summary_sheet(issues.tally_defect_types())
     xlsx.build_detailed_table(issues.build_reporting_dict())
     xlsx.save()
-    msg = f"- XLSX processing complete. ({time.perf_counter() - start_processing:0.2f} secs)"
+    msg = f"- XLSX processing complete. ({time.perf_counter() - start_processing:0.3f} secs)"
     log.info(msg)
     print(msg)
 
@@ -107,3 +110,7 @@ if __name__ == '__main__':
     print(f"Total Issue Count: {total_count}")
 
     log.info("----------------- STOP -----------------")
+
+    # Write each ELF File's defect and call stack data into a json file for building the analysis capability
+    section = ELFLogSections.CALL_STACK_INFORMATION
+    debug.issue_list_to_file(issue_list=issues, section=section, data_file="CBR.data.json.txt")
